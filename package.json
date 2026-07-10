@@ -1,0 +1,30 @@
+{
+  "name": "bd-copilot",
+  "version": "0.1.0",
+  "private": true,
+  "allowScripts": ["better-sqlite3", "sharp"],
+  "scripts": {
+    "dev": "next dev -p 3300",
+    "build": "next build",
+    "start": "next start -p 3300",
+    "postinstall": "npm rebuild better-sqlite3 || true; cd node_modules/better-sqlite3 && npx --yes prebuild-install || true"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.110.0",
+    "better-sqlite3": "^12.11.1",
+    "next": "16.2.10",
+    "react": "19.2.4",
+    "react-dom": "19.2.4",
+    "react-markdown": "^10.1.0",
+    "undici": "^7.28.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4",
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "tailwindcss": "^4",
+    "typescript": "^5"
+  }
+}
