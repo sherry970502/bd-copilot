@@ -7,6 +7,7 @@ import {
   messageText,
 } from "./client";
 import { getStage } from "../scene-pack";
+import { getProfile } from "../profile";
 import type { Project, Artifact } from "../types";
 
 /**
@@ -26,6 +27,7 @@ const COMMON_PROTOCOL = `
 
 function buildContext(project: Project, stageKey: string): string {
   const db = getDb();
+  const profile = getProfile();
   const confirmed = db
     .prepare(
       "SELECT stage_key, title, content FROM artifacts WHERE project_id = ? AND status = 'confirmed' ORDER BY id ASC"
@@ -36,18 +38,20 @@ function buildContext(project: Project, stageKey: string): string {
       ? confirmed
           .map((a) => {
             const stage = getStage(a.stage_key);
-            return `【${stage?.name ?? a.stage_key}｜${a.title}】\n${a.content}`;
+            return `【${stage?.name ?? "进展纪要"}｜${a.title}】\n${a.content}`;
           })
           .join("\n\n---\n\n")
       : "（暂无已确认的产出物——如果你的工作依赖前置环节的结论，请提醒用户先完成对应环节）";
 
   return `—— 项目档案 ——
-我方情况（用户自述）：
-${project.my_profile}
+我方情况（工作区档案）：
+${profile?.content ?? project.my_profile ?? "（未建档）"}
 
 目标对象：${project.target || "（尚未明确）"}
+这次的处境与目标（用户建项目时的描述）：
+${project.situation ?? "（无）"}
 
-已确认的产出物档案（来自各环节专员，按时间序）：
+已确认的产出物与进展纪要（全体专员共享，按时间序）：
 ${archiveText}`;
 }
 

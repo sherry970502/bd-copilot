@@ -3,16 +3,33 @@ import path from "path";
 import fs from "fs";
 
 const SCHEMA = `
+CREATE TABLE IF NOT EXISTS profile (
+  id INTEGER PRIMARY KEY CHECK (id = 1),
+  content TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS projects (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   name TEXT NOT NULL,
-  my_profile TEXT NOT NULL,
+  my_profile TEXT,
+  situation TEXT,
+  plan TEXT,
   target TEXT,
   current_stage TEXT NOT NULL,
   status TEXT NOT NULL DEFAULT 'active',
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS timeline (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  project_id INTEGER NOT NULL,
+  kind TEXT NOT NULL,
+  text TEXT NOT NULL,
+  ts TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_timeline_project ON timeline(project_id);
 
 CREATE TABLE IF NOT EXISTS project_stages (
   project_id INTEGER NOT NULL,
@@ -69,7 +86,24 @@ function createDb(): Database.Database {
   const db = new Database(path.join(dataDir, "app.db"));
   db.pragma("journal_mode = WAL");
   db.exec(SCHEMA);
+  migrate(db);
   return db;
+}
+
+/** 轻量迁移：给已有库补新列 */
+function migrate(db: Database.Database) {
+  const cols = db.prepare("PRAGMA table_info(projects)").all() as { name: string }[];
+  const have = new Set(cols.map((c) => c.name));
+  for (const col of ["situation", "plan"]) {
+    if (!have.has(col)) db.exec(`ALTER TABLE projects ADD COLUMN ${col} TEXT`);
+  }
+}
+
+/** 项目时间线：用户可见的进展叙事（“发生了什么”而非“走到第几格”） */
+export function addTimeline(projectId: number, kind: string, text: string) {
+  getDb()
+    .prepare("INSERT INTO timeline (project_id, kind, text, ts) VALUES (?, ?, ?, ?)")
+    .run(projectId, kind, text, now());
 }
 
 const globalForDb = globalThis as unknown as { __bdcDb?: Database.Database };

@@ -1,14 +1,53 @@
 export type StageStatus = "pending" | "active" | "done" | "skipped";
 
+/** 项目结局状态：合作的死亡是一种结局，不是生命周期的一个阶段 */
+export type ProjectStatus = "active" | "waiting" | "won" | "shelved";
+
+export const PROJECT_STATUS_LABELS: Record<ProjectStatus, string> = {
+  active: "推进中",
+  waiting: "等待对方",
+  won: "已达成 🎉",
+  shelved: "已搁置",
+};
+
+/** 领航员产出的活计划：每个环节本次需不需要 */
+export interface PlanItem {
+  stage: string;
+  needed: boolean;
+  reason: string;
+}
+
+/** 领航员建议的下一步（直达对应专员） */
+export interface NextAction {
+  stage: string;
+  action: string;
+}
+
+export interface NavPlan {
+  items: PlanItem[];
+  next: NextAction[];
+  updated_at: string;
+}
+
 export interface Project {
   id: number;
   name: string;
-  my_profile: string;
+  my_profile: string | null; // 遗留字段（档案已迁移到 profile 表）
+  situation: string | null; // 建项目时用户描述的处境与目标
+  plan: string | null; // JSON NavPlan
   target: string | null;
   current_stage: string;
-  status: "active" | "archived";
+  status: ProjectStatus;
   created_at: string;
   updated_at: string;
+}
+
+export interface TimelineEvent {
+  id: number;
+  project_id: number;
+  kind: string;
+  text: string;
+  ts: string;
 }
 
 export interface ProjectStage {
