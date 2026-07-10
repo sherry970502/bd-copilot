@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "next dev -p 3300",
     "build": "next build",
-    "start": "next start -p 3300",
+    "start": "next start -p ${PORT:-3300}",
     "postinstall": "npm rebuild better-sqlite3 || true; cd node_modules/better-sqlite3 && npx --yes prebuild-install || true"
   },
   "dependencies": {
