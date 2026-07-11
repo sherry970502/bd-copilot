@@ -155,7 +155,7 @@ export default function ProjectPage() {
       : "";
 
   return (
-    <main className="flex-1 flex flex-col h-screen overflow-hidden">
+    <main className="flex flex-col h-dvh overflow-hidden">
       {/* 顶栏 */}
       <header className="border-b border-line bg-panel px-5 py-3 flex items-center gap-3 shrink-0">
         <Link href="/" className="text-muted hover:text-foreground text-sm">← 项目</Link>
@@ -218,7 +218,7 @@ export default function ProjectPage() {
 
       <div className="flex-1 flex min-h-0">
         {/* 主区 */}
-        <div className="flex-1 flex flex-col min-w-0">
+        <div className="flex-1 flex flex-col min-w-0 min-h-0 overflow-hidden">
           {!selected ? (
             /* ============ 领航员视图（默认主角） ============ */
             <>
@@ -256,7 +256,7 @@ export default function ProjectPage() {
                 </div>
               )}
 
-              <div className="flex-1 overflow-y-auto px-5 py-4 flex flex-col gap-4">
+              <div className="flex-1 min-h-0 overflow-y-auto px-5 py-4 flex flex-col gap-4">
                 {navGreeting && (
                   <div className="bg-panel border border-line rounded-2xl px-4 py-2.5 text-sm max-w-[85%]">
                     {navGreeting}
@@ -341,7 +341,7 @@ export default function ProjectPage() {
                 </div>
               </div>
 
-              <div className="flex-1 overflow-y-auto px-5 py-4 flex flex-col gap-4">
+              <div className="flex-1 min-h-0 overflow-y-auto px-5 py-4 flex flex-col gap-4">
                 {messages.length === 0 && (
                   <p className="text-xs text-muted">
                     点下方任务芯片交付专项任务（每个任务有专属方法论），或直接输入自由交流。
@@ -440,7 +440,7 @@ export default function ProjectPage() {
         </div>
 
         {/* 右栏：时间线 + 档案 */}
-        <aside className="w-80 border-l border-line bg-panel/40 overflow-y-auto p-4 flex flex-col gap-5 shrink-0 hidden lg:flex">
+        <aside className="w-80 min-h-0 border-l border-line bg-panel/40 overflow-y-auto p-4 flex flex-col gap-5 shrink-0 hidden lg:flex">
           {selected && (
             <div>
               <h3 className="text-xs text-muted font-semibold mb-2">本环节产出物（{stageArtifacts.length}）</h3>
