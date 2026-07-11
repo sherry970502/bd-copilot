@@ -36,7 +36,10 @@ const NAV_SYSTEM_BASE = `你是「领航员」——用户的 BD 项目总调度
 
 function stageList(): string {
   return STAGES.filter((s) => !s.coming)
-    .map((s) => `- ${s.key}（${s.name}）：${s.description}——专员：${s.agent?.name}`)
+    .map(
+      (s) =>
+        `- ${s.key}（${s.name}）：${s.description}——专员：${s.agent?.name}，可交付任务：${(s.tasks ?? []).map((t) => t.label).join("、")}`
+    )
     .join("\n");
 }
 

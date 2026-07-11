@@ -37,6 +37,9 @@ export default function ProjectPage() {
   const [selected, setSelected] = useState<string>("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
+  /** 点了"需粘贴"型任务后挂起的任务 key，随下一条消息发出 */
+  const [pendingTask, setPendingTask] = useState<string | null>(null);
+  const [busyWebSearch, setBusyWebSearch] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [showMap, setShowMap] = useState(false);
@@ -74,8 +77,11 @@ export default function ProjectPage() {
   const stageArtifacts = artifacts.filter((a) => a.stage_key === selected);
   const confirmedAll = artifacts.filter((a) => a.status === "confirmed");
 
-  async function send(text: string) {
+  async function send(text: string, taskKey?: string) {
     if (!text.trim() || busy) return;
+    const task = taskKey ?? pendingTask ?? undefined;
+    setBusyWebSearch(!!getStage(selected)?.tasks?.find((t) => t.key === task)?.webSearch);
+    setPendingTask(null);
     setBusy(true);
     setError("");
     setInput("");
@@ -101,7 +107,7 @@ export default function ProjectPage() {
       res = await fetch(`/api/projects/${projectId}/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ stage: selected, message: text }),
+        body: JSON.stringify({ stage: selected, message: text, task }),
       });
     }
     const data = await res.json().catch(() => ({}));
@@ -337,19 +343,9 @@ export default function ProjectPage() {
 
               <div className="flex-1 overflow-y-auto px-5 py-4 flex flex-col gap-4">
                 {messages.length === 0 && (
-                  <div className="flex flex-col gap-2 items-start">
-                    <p className="text-xs text-muted">一键任务（也可以直接输入）：</p>
-                    {stageDef.agent.tasks.map((t) => (
-                      <button
-                        key={t.key}
-                        disabled={busy}
-                        onClick={() => (t.prompt.includes("粘贴在这里") ? setInput(t.prompt) : send(t.prompt))}
-                        className="text-sm border border-accent/40 text-accent rounded-xl px-4 py-2 hover:bg-accent/10 disabled:opacity-40 text-left"
-                      >
-                        {t.label}
-                      </button>
-                    ))}
-                  </div>
+                  <p className="text-xs text-muted">
+                    点下方任务芯片交付专项任务（每个任务有专属方法论），或直接输入自由交流。
+                  </p>
                 )}
                 {messages.map((m, i) => (
                   <div key={i} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
@@ -367,14 +363,49 @@ export default function ProjectPage() {
                 {busy && (
                   <div className="text-xs text-accent animate-pulse">
                     {stageDef.agent.emoji} {stageDef.agent.name}工作中…
-                    {stageDef.agent.webSearch ? "（含联网搜索，约 1-2 分钟）" : ""}
+                    {busyWebSearch ? "（含联网搜索，约 1-2 分钟）" : ""}
                   </div>
                 )}
                 {error && <p className="text-xs text-bad">{error}</p>}
                 <div ref={chatEndRef} />
               </div>
 
-              <div className="border-t border-line px-5 py-3 shrink-0">
+              <div className="border-t border-line px-5 py-3 shrink-0 flex flex-col gap-2">
+                {/* 任务芯片：任务是一等公民，常驻可用 */}
+                <div className="flex flex-wrap gap-1.5">
+                  {(stageDef.tasks ?? []).map((t) => {
+                    const needsPaste = t.prompt.includes("贴在这里");
+                    return (
+                      <button
+                        key={t.key}
+                        disabled={busy}
+                        onClick={() => {
+                          if (needsPaste) {
+                            setInput(t.prompt);
+                            setPendingTask(t.key);
+                          } else {
+                            send(t.prompt, t.key);
+                          }
+                        }}
+                        className={`text-[11px] border rounded-lg px-2.5 py-1 disabled:opacity-40 ${
+                          pendingTask === t.key
+                            ? "border-accent text-accent bg-accent/15 font-bold"
+                            : "border-accent/40 text-accent hover:bg-accent/10"
+                        }`}
+                      >
+                        {t.label}
+                      </button>
+                    );
+                  })}
+                  {pendingTask && (
+                    <button
+                      onClick={() => { setPendingTask(null); setInput(""); }}
+                      className="text-[11px] text-muted hover:text-foreground px-1.5"
+                    >
+                      取消任务 ✕
+                    </button>
+                  )}
+                </div>
                 <div className="flex gap-2 items-end">
                   <textarea
                     value={input}
@@ -386,7 +417,11 @@ export default function ProjectPage() {
                       }
                     }}
                     rows={Math.min(6, Math.max(1, input.split("\n").length))}
-                    placeholder={`对${stageDef.agent.name}说…（Enter 发送）`}
+                    placeholder={
+                      pendingTask
+                        ? "把材料粘贴进来后发送，专员按该任务的方法论处理"
+                        : `对${stageDef.agent.name}说…（Enter 发送）`
+                    }
                     className="flex-1 bg-panel2 border border-line rounded-xl p-3 text-sm outline-none focus:border-accent resize-none"
                   />
                   <button

@@ -6,7 +6,7 @@ import {
   streamWithServerTools,
   messageText,
 } from "./client";
-import { getStage } from "../scene-pack";
+import { getStage, getTask } from "../scene-pack";
 import { getProfile } from "../profile";
 import type { Project, Artifact } from "../types";
 
@@ -60,15 +60,21 @@ export interface AgentReply {
   artifact: { id: number; title: string; content: string } | null;
 }
 
-/** 运行一次专员对话：注入档案上下文 + 本环节聊天记录，提取产出物入档（草稿态） */
+/**
+ * 运行一次专员对话。任务是提示词装配的一等公民：
+ * - 带 taskKey：System 用该任务的专属方法论（对应雷达一张需求卡，是 skill 换装点）
+ * - 不带：用专员的轻量人格底座（自由交流、推荐任务）
+ */
 export async function runAgent(
   project: Project,
   stageKey: string,
-  userMessage: string
+  userMessage: string,
+  taskKey?: string
 ): Promise<AgentReply> {
   const stage = getStage(stageKey);
   if (!stage?.agent) throw new Error("该环节暂未开放");
   const agent = stage.agent;
+  const task = taskKey ? getTask(stageKey, taskKey) : undefined;
   const db = getDb();
   const ts = now();
 
@@ -85,22 +91,27 @@ export async function runAgent(
       .all(project.id, stageKey) as { role: "user" | "assistant"; content: string }[]
   ).reverse();
 
+  const methodology = task
+    ? `本次执行专项任务：「${task.label}」，方法论如下（严格遵循）：
+${task.taskPrompt}`
+    : agent.basePrompt;
+
   const system = `你是「${agent.name}」（${SCENE_LABEL}的 AI 专员），当前服务环节：${stage.name}——${stage.description}。
 
-${agent.systemPrompt}
+${methodology}
 ${COMMON_PROTOCOL}
 
 ${buildContext(project, stageKey)}`;
 
   assertBudget();
   recordAiCall();
-  trackEvent("agent_call", agent.key, project.id, stageKey);
+  trackEvent("agent_call", task ? `${agent.key}:${task.key}` : agent.key, project.id, stageKey);
 
   const message = await streamWithServerTools({
     model: AGENT_MODEL,
     max_tokens: 8000,
     system,
-    ...(agent.webSearch
+    ...(task?.webSearch
       ? { tools: [{ type: "web_search_20260209" as const, name: "web_search" as const, max_uses: 6 }] }
       : {}),
     messages: history.map((m) => ({ role: m.role, content: m.content })),

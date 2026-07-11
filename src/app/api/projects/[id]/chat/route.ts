@@ -15,12 +15,14 @@ export async function POST(
   const body = (await request.json().catch(() => ({}))) as {
     stage?: string;
     message?: string;
+    /** 专项任务 key：带上则用该任务的专属方法论提示词 */
+    task?: string;
   };
   if (!body.stage || !body.message?.trim()) {
     return NextResponse.json({ error: "缺少环节或消息内容" }, { status: 400 });
   }
   try {
-    const reply = await runAgent(project, body.stage, body.message.trim());
+    const reply = await runAgent(project, body.stage, body.message.trim(), body.task);
     return NextResponse.json(reply);
   } catch (e) {
     return NextResponse.json(
