@@ -179,35 +179,52 @@ export default function ProjectPage() {
         </button>
       </header>
 
-      {/* 全程地图（按需展开）：生命周期是坐标系，不是主角 */}
+      {/* 全程地图（按需展开）：生命周期是坐标系，不是主角。
+          状态用角标与底色表达，文字保持全可读（浅色底上降透明度会糊成一片） */}
       {showMap && (
-        <div className="border-b border-line bg-panel/60 px-5 py-3 shrink-0">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+        <div className="border-b border-line bg-panel/80 backdrop-blur px-5 py-3 shrink-0">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5">
             {STAGES.map((s) => {
               const st = stages.find((x) => x.stage_key === s.key)?.status ?? "pending";
               const pi = plan?.items.find((p) => p.stage === s.key);
               const skipped = pi ? !pi.needed : false;
+              const badge = s.coming
+                ? { text: "V2 即将上线", cls: "text-muted bg-panel2 border-line" }
+                : st === "done"
+                  ? { text: "✓ 已完成", cls: "text-good bg-good/10 border-good/30" }
+                  : skipped
+                    ? { text: "本次跳过", cls: "text-muted bg-panel2 border-line" }
+                    : st === "active"
+                      ? { text: "进行中", cls: "text-accent bg-accent/10 border-accent/30" }
+                      : { text: "待进行", cls: "text-accent/80 bg-accent/5 border-accent/20" };
               return (
                 <button
                   key={s.key}
                   disabled={!!s.coming}
                   onClick={() => { setSelected(s.key); setShowMap(false); }}
-                  className={`text-left border rounded-xl px-3 py-2 transition-colors ${
+                  className={`text-left border rounded-xl px-3 py-2.5 transition-all ${
                     s.coming
-                      ? "border-line/40 text-muted/40 cursor-not-allowed"
+                      ? "border-dashed border-line bg-panel2/60 cursor-not-allowed"
                       : skipped
-                        ? "border-line/60 text-muted/60 hover:border-line"
+                        ? "border-dashed border-line bg-panel2/60 hover:border-muted/50 hover:bg-panel2"
                         : st === "done"
-                          ? "border-good/40 bg-good/5 hover:border-good/70"
-                          : "border-line hover:border-accent/60"
+                          ? "card-soft bg-panel border-good/30 hover:border-good/60"
+                          : "card-soft bg-panel border-line hover:border-accent/60 hover:-translate-y-0.5"
                   }`}
                 >
-                  <div className="text-xs font-bold flex items-center gap-1.5">
-                    {st === "done" ? "✅" : s.agent?.emoji ?? "⏳"} {s.name}
-                    {s.coming && <span className="text-[9px] font-normal">（V2）</span>}
+                  <div className="flex items-center gap-1.5">
+                    <span className={`text-sm ${s.coming || skipped ? "grayscale opacity-70" : ""}`}>
+                      {s.agent?.emoji ?? "🔭"}
+                    </span>
+                    <span className={`text-xs font-bold ${s.coming || skipped ? "text-muted" : "text-foreground"}`}>
+                      {s.name}
+                    </span>
+                    <span className={`ml-auto text-[9px] border rounded-full px-1.5 py-0.5 whitespace-nowrap ${badge.cls}`}>
+                      {badge.text}
+                    </span>
                   </div>
-                  <div className="text-[10px] text-muted mt-0.5 leading-snug line-clamp-2">
-                    {pi ? (pi.needed ? pi.reason || s.description : `本次不需要：${pi.reason}`) : s.description}
+                  <div className="text-[10px] text-muted mt-1 leading-snug line-clamp-2">
+                    {pi ? (pi.needed ? pi.reason || s.description : pi.reason) : s.description}
                   </div>
                 </button>
               );
