@@ -70,13 +70,13 @@ export default function ProfilePage() {
         onChange={(e) => setContent(e.target.value)}
         rows={18}
         autoFocus
-        className="bg-panel border border-line rounded-2xl p-4 text-sm leading-relaxed outline-none focus:border-accent resize-none"
+        className="card-soft bg-panel border border-line rounded-2xl p-4 text-sm leading-relaxed outline-none focus:border-accent resize-none"
       />
       {error && <p className="text-sm text-bad">{error}</p>}
       <button
         onClick={save}
         disabled={busy || content.trim().length < 20}
-        className="self-end bg-accent text-black font-semibold text-sm rounded-xl px-6 py-2.5 disabled:opacity-40 hover:opacity-90"
+        className="self-end bg-accent text-white font-semibold text-sm rounded-xl px-6 py-2.5 disabled:opacity-40 hover:opacity-90"
       >
         {busy ? "保存中…" : existing ? "保存修改" : "建档完成，开始 →"}
       </button>

@@ -258,7 +258,7 @@ export default function ProjectPage() {
 
               <div className="flex-1 min-h-0 overflow-y-auto px-5 py-4 flex flex-col gap-4">
                 {navGreeting && (
-                  <div className="bg-panel border border-line rounded-2xl px-4 py-2.5 text-sm max-w-[85%]">
+                  <div className="card-soft bg-panel border border-line rounded-2xl px-4 py-2.5 text-sm max-w-[85%]">
                     {navGreeting}
                   </div>
                 )}
@@ -275,10 +275,10 @@ export default function ProjectPage() {
                   <div key={i} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
                     <div
                       className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${
-                        m.role === "user" ? "bg-accent/15 border border-accent/30" : "bg-panel border border-line"
+                        m.role === "user" ? "bg-accent/15 border border-accent/30" : "card-soft bg-panel border border-line"
                       }`}
                     >
-                      <div className="prose-sm prose-invert [&_p]:my-1.5 [&_ul]:my-1.5">
+                      <div className="prose-sm [&_p]:my-1.5 [&_ul]:my-1.5">
                         <ReactMarkdown>{m.content}</ReactMarkdown>
                       </div>
                     </div>
@@ -307,7 +307,7 @@ export default function ProjectPage() {
                   <button
                     onClick={() => send(input)}
                     disabled={busy || !input.trim()}
-                    className="bg-accent text-black font-semibold text-sm rounded-xl px-5 py-3 disabled:opacity-40 hover:opacity-90"
+                    className="bg-accent text-white font-semibold text-sm rounded-xl px-5 py-3 disabled:opacity-40 hover:opacity-90"
                   >
                     发送
                   </button>
@@ -351,10 +351,10 @@ export default function ProjectPage() {
                   <div key={i} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
                     <div
                       className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${
-                        m.role === "user" ? "bg-accent/15 border border-accent/30" : "bg-panel border border-line"
+                        m.role === "user" ? "bg-accent/15 border border-accent/30" : "card-soft bg-panel border border-line"
                       }`}
                     >
-                      <div className="prose-sm prose-invert [&_p]:my-1.5 [&_ul]:my-1.5 [&_h2]:text-sm [&_h2]:font-bold">
+                      <div className="prose-sm [&_p]:my-1.5 [&_ul]:my-1.5 [&_h2]:text-sm [&_h2]:font-bold">
                         <ReactMarkdown>{m.content}</ReactMarkdown>
                       </div>
                     </div>
@@ -427,7 +427,7 @@ export default function ProjectPage() {
                   <button
                     onClick={() => send(input)}
                     disabled={busy || !input.trim()}
-                    className="bg-accent text-black font-semibold text-sm rounded-xl px-5 py-3 disabled:opacity-40 hover:opacity-90"
+                    className="bg-accent text-white font-semibold text-sm rounded-xl px-5 py-3 disabled:opacity-40 hover:opacity-90"
                   >
                     发送
                   </button>
@@ -446,7 +446,7 @@ export default function ProjectPage() {
               <h3 className="text-xs text-muted font-semibold mb-2">本环节产出物（{stageArtifacts.length}）</h3>
               <div className="flex flex-col gap-2">
                 {stageArtifacts.map((a) => (
-                  <div key={a.id} className="bg-panel border border-line rounded-xl p-3 flex flex-col gap-2">
+                  <div key={a.id} className="card-soft bg-panel border border-line rounded-xl p-3 flex flex-col gap-2">
                     <button onClick={() => setViewArtifact(a)} className="text-left">
                       <div className="text-[13px] font-medium leading-snug hover:text-accent">📄 {a.title}</div>
                     </button>
@@ -501,8 +501,8 @@ export default function ProjectPage() {
       {/* 产出物查看 */}
       {viewArtifact && (
         <div className="fixed inset-0 z-40 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/60" onClick={() => setViewArtifact(null)} />
-          <div className="relative w-full max-w-2xl max-h-[85vh] bg-panel border border-line rounded-2xl flex flex-col">
+          <div className="absolute inset-0 bg-black/30" onClick={() => setViewArtifact(null)} />
+          <div className="relative w-full max-w-2xl max-h-[85vh] card-soft bg-panel border border-line rounded-2xl flex flex-col">
             <div className="px-5 py-3 border-b border-line flex items-center gap-2 shrink-0">
               <h2 className="font-bold text-sm flex-1">📄 {viewArtifact.title}</h2>
               {viewArtifact.status === "draft" && (
@@ -511,7 +511,7 @@ export default function ProjectPage() {
                     await patchArtifact(viewArtifact.id, { status: "confirmed" });
                     setViewArtifact(null);
                   }}
-                  className="text-xs bg-accent text-black font-semibold rounded-lg px-3 py-1.5 hover:opacity-90"
+                  className="text-xs bg-accent text-white font-semibold rounded-lg px-3 py-1.5 hover:opacity-90"
                 >
                   确认入档 →
                 </button>
@@ -530,7 +530,7 @@ export default function ProjectPage() {
               </button>
               <button onClick={() => setViewArtifact(null)} className="text-muted hover:text-foreground text-lg px-1">✕</button>
             </div>
-            <div className="overflow-y-auto p-5 prose-sm prose-invert [&_h2]:text-base [&_h2]:font-bold [&_p]:my-2 [&_table]:text-xs">
+            <div className="overflow-y-auto p-5 prose-sm [&_h2]:text-base [&_h2]:font-bold [&_p]:my-2 [&_table]:text-xs">
               <ReactMarkdown>{viewArtifact.content}</ReactMarkdown>
             </div>
           </div>

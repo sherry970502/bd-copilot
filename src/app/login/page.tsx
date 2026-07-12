@@ -31,7 +31,7 @@ export default function LoginPage() {
     <main className="flex-1 flex items-center justify-center p-6">
       <form
         onSubmit={submit}
-        className="w-full max-w-sm bg-panel border border-line rounded-2xl p-8 flex flex-col gap-5"
+        className="w-full max-w-sm card-soft bg-panel border border-line rounded-2xl p-8 flex flex-col gap-5"
       >
         <div>
           <h1 className="text-xl font-bold">BD Copilot · AI 商务拓展团队</h1>
@@ -49,7 +49,7 @@ export default function LoginPage() {
         <button
           type="submit"
           disabled={loading || !password}
-          className="bg-accent text-black font-semibold rounded-lg py-2 disabled:opacity-40 hover:opacity-90"
+          className="bg-accent text-white font-semibold rounded-lg py-2 disabled:opacity-40 hover:opacity-90"
         >
           {loading ? "验证中…" : "进入看板"}
         </button>

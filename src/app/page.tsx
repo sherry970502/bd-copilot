@@ -85,7 +85,7 @@ export default function HomePage() {
         <span className="text-[11px] text-muted">AI {ai.calls}/{ai.limit}</span>
         <button
           onClick={() => setShowCreate(true)}
-          className="bg-accent text-black font-semibold text-sm rounded-xl px-5 py-2.5 hover:opacity-90 shadow-lg shadow-accent/20"
+          className="bg-accent text-white font-semibold text-sm rounded-xl px-5 py-2.5 hover:opacity-90 shadow-lg shadow-accent/20"
         >
           ＋ 新的合作目标
         </button>
@@ -102,7 +102,7 @@ export default function HomePage() {
             </p>
             <button
               onClick={() => setShowCreate(true)}
-              className="mt-6 bg-accent text-black font-semibold text-sm rounded-xl px-6 py-2.5 hover:opacity-90"
+              className="mt-6 bg-accent text-white font-semibold text-sm rounded-xl px-6 py-2.5 hover:opacity-90"
             >
               开始第一个项目
             </button>
@@ -114,7 +114,7 @@ export default function HomePage() {
             <Link
               key={p.id}
               href={`/projects/${p.id}`}
-              className="bg-panel border border-line rounded-xl p-4 flex flex-col gap-2.5 hover:border-accent/60 transition-colors"
+              className="card-soft bg-panel border border-line rounded-xl p-4 flex flex-col gap-2.5 hover:border-accent/60 transition-colors"
             >
               <div className="flex items-center gap-2">
                 <h2 className="font-bold flex-1">{p.name}</h2>
@@ -135,8 +135,8 @@ export default function HomePage() {
 
       {showCreate && (
         <div className="fixed inset-0 z-40 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/60" onClick={() => setShowCreate(false)} />
-          <div className="relative w-full max-w-lg bg-panel border border-line rounded-2xl p-6 flex flex-col gap-4">
+          <div className="absolute inset-0 bg-black/30" onClick={() => setShowCreate(false)} />
+          <div className="relative w-full max-w-lg card-soft bg-panel border border-line rounded-2xl p-6 flex flex-col gap-4">
             <div>
               <h2 className="font-bold">新的合作目标 🤝</h2>
               <p className="text-xs text-muted mt-1">
@@ -171,7 +171,7 @@ export default function HomePage() {
               <button
                 onClick={create}
                 disabled={busy || situation.trim().length < 5 || !target.trim()}
-                className="bg-accent text-black font-semibold text-sm rounded-lg px-5 py-2 disabled:opacity-40 hover:opacity-90"
+                className="bg-accent text-white font-semibold text-sm rounded-lg px-5 py-2 disabled:opacity-40 hover:opacity-90"
               >
                 {busy ? "创建中…" : "开始 →"}
               </button>
