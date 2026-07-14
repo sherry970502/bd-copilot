@@ -62,6 +62,21 @@ export default function ProjectPage() {
     [projectId, selected]
   );
 
+  // 切换项目时清空全部状态——Next 复用同一组件实例，不清会把上一个项目的对话/计划带过来（串台 bug）
+  useEffect(() => {
+    setProject(null);
+    setStages([]);
+    setArtifacts([]);
+    setTimeline([]);
+    setMessages([]);
+    setSelected("");
+    setInput("");
+    setPendingTask(null);
+    setShowMap(false);
+    setViewArtifact(null);
+    setError("");
+  }, [projectId]);
+
   useEffect(() => {
     load(selected);
     // eslint-disable-next-line react-hooks/exhaustive-deps
