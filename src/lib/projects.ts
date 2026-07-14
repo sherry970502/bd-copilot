@@ -56,7 +56,7 @@ export function getProjectDetail(id: number) {
   const timeline = db
     .prepare("SELECT * FROM timeline WHERE project_id = ? ORDER BY id DESC LIMIT 50")
     .all(id) as TimelineEvent[];
-  return { project, stages, artifacts, timeline };
+  return { project, stages, artifacts, timeline, todos: getTodos(id), messages: getMessages(id) };
 }
 
 export function setProjectStatus(id: number, status: Project["status"], byUser = true) {
@@ -65,12 +65,31 @@ export function setProjectStatus(id: number, status: Project["status"], byUser =
   if (byUser) addTimeline(id, "status", `项目状态调整为「${status}」`);
 }
 
-export function getStageMessages(projectId: number, stageKey: string): ChatMessage[] {
+/** 统一群聊流：全部角色的消息按时间序（群聊模型） */
+export function getMessages(projectId: number): ChatMessage[] {
+  return getDb()
+    .prepare("SELECT * FROM messages WHERE project_id = ? ORDER BY id ASC LIMIT 500")
+    .all(projectId) as ChatMessage[];
+}
+
+export function getTodos(projectId: number) {
   return getDb()
     .prepare(
-      "SELECT * FROM messages WHERE project_id = ? AND stage_key = ? ORDER BY id ASC LIMIT 200"
+      "SELECT * FROM todos WHERE project_id = ? ORDER BY CASE status WHEN 'pending' THEN 0 ELSE 1 END, id DESC LIMIT 50"
     )
-    .all(projectId, stageKey) as ChatMessage[];
+    .all(projectId);
+}
+
+export function setTodoStatus(id: number, status: "pending" | "done") {
+  getDb()
+    .prepare("UPDATE todos SET status = ?, done_at = ? WHERE id = ?")
+    .run(status, status === "done" ? now() : null, id);
+}
+
+export function addTodo(projectId: number, text: string) {
+  getDb()
+    .prepare("INSERT INTO todos (project_id, text, status, source, created_at) VALUES (?, ?, 'pending', 'manual', ?)")
+    .run(projectId, text.trim(), now());
 }
 
 /** 环节状态流转；进入某环节时把它设为 active 并更新 current_stage */

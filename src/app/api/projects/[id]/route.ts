@@ -1,21 +1,18 @@
 import { NextResponse } from "next/server";
-import { getProjectDetail, setStageStatus, getStageMessages, setProjectStatus } from "@/lib/projects";
+import { getProjectDetail, setStageStatus, setProjectStatus } from "@/lib/projects";
 import { getStage } from "@/lib/scene-pack";
 import { PROJECT_STATUS_LABELS, type ProjectStatus, type StageStatus } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(
-  request: Request,
+  _request: Request,
   ctx: { params: Promise<{ id: string }> }
 ) {
   const { id } = await ctx.params;
   const detail = getProjectDetail(Number(id));
   if (!detail) return NextResponse.json({ error: "项目不存在" }, { status: 404 });
-  const url = new URL(request.url);
-  const stageKey = url.searchParams.get("stage");
-  const messages = stageKey ? getStageMessages(Number(id), stageKey) : [];
-  return NextResponse.json({ ...detail, messages });
+  return NextResponse.json(detail);
 }
 
 /** 环节流转 {stage, status} 或 项目状态 {project_status} */

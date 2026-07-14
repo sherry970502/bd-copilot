@@ -71,10 +71,24 @@ export interface Artifact {
 export interface ChatMessage {
   id: number;
   project_id: number;
+  /** 发言的专员（nav=领航员；其余为环节 key）——群聊统一流中标识"谁说的" */
   stage_key: string;
   role: "user" | "assistant";
   content: string;
+  /** 该消息产出的产出物（流内渲染成卡片） */
+  artifact_id: number | null;
   ts: string;
+}
+
+/** 人类待办：AI 能干的都交给 AI，需要人拍板/动手的进这里 */
+export interface Todo {
+  id: number;
+  project_id: number;
+  text: string;
+  status: "pending" | "done";
+  source: string | null;
+  created_at: string;
+  done_at: string | null;
 }
 
 export const STAGE_STATUS_LABELS: Record<StageStatus, string> = {

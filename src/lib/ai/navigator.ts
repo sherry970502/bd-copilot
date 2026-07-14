@@ -8,6 +8,7 @@ import {
 } from "./client";
 import { STAGES, getStage } from "../scene-pack";
 import { getProfile } from "../profile";
+import { buildHistory } from "./agent";
 import type { NavPlan, Project, ProjectStatus, Artifact } from "../types";
 
 /**
@@ -30,8 +31,9 @@ const NAV_SYSTEM_BASE = `你是「领航员」——用户的 BD 项目总调度
 - 用户闲聊或提问时正常回答，不必每次都动计划
 
 **机器可读块**：每次回复的最后，另起一行输出（用户看不到，不算回复正文）：
-<nav>{"summary":"若用户带来了新的事实性进展，用 50 字内提炼成纪要，否则 null","plan":[{"stage":"环节key","needed":true或false,"reason":"一句话理由"}],"next":[{"stage":"环节key","action":"具体要做的事，一句话"}],"status":"active|waiting|won|shelved 或 null（仅在建议变更项目状态时给值）"}</nav>
+<nav>{"summary":"若用户带来了新的事实性进展，用 50 字内提炼成纪要，否则 null","plan":[{"stage":"环节key","needed":true或false,"reason":"一句话理由"}],"next":[{"stage":"环节key","action":"具体要做的事，一句话"}],"todos":["只有人能做的事（发出邮件/赴约/内部拍板/等对方答复），0-3 条，AI 能干的绝不放进来"],"status":"active|waiting|won|shelved 或 null（仅在建议变更项目状态时给值）"}</nav>
 - plan 必须包含全部可用环节（{STAGE_KEYS}）；next 给 1-2 项，stage 必须取自可用环节
+- todos 是「人类待办区」：判断标准是"这件事 AI 无法代劳"——需要用户去真实世界执行或拍板的才列，且不与已有待办重复
 - JSON 必须语法合法，字符串内不要用未转义英文双引号`;
 
 function stageList(): string {
@@ -90,13 +92,7 @@ export async function runNavigator(project: Project, userMessage: string): Promi
     "INSERT INTO messages (project_id, stage_key, role, content, ts) VALUES (?, 'nav', 'user', ?, ?)"
   ).run(project.id, userMessage, now());
 
-  const history = (
-    db
-      .prepare(
-        "SELECT role, content FROM messages WHERE project_id = ? AND stage_key = 'nav' ORDER BY id DESC LIMIT 13"
-      )
-      .all(project.id) as { role: "user" | "assistant"; content: string }[]
-  ).reverse();
+  const history = buildHistory(project.id);
 
   const availableKeys = STAGES.filter((s) => !s.coming).map((s) => s.key);
   const system =
@@ -115,7 +111,7 @@ export async function runNavigator(project: Project, userMessage: string): Promi
     system,
     messages: history.map((m) => ({ role: m.role, content: m.content })),
   });
-  const raw = messageText(message);
+  const raw = messageText(message).replace(/^【[^】]{1,12}】\s*/, "");
   if (!raw.trim()) throw new Error("领航员没有返回内容");
 
   // 解析机器块
@@ -130,8 +126,24 @@ export async function runNavigator(project: Project, userMessage: string): Promi
         summary?: string | null;
         plan?: { stage?: string; needed?: boolean; reason?: string }[];
         next?: { stage?: string; action?: string }[];
+        todos?: string[];
         status?: string | null;
       };
+      // 人类待办：只收 AI 无法代劳的事，与未完成待办去重
+      if (Array.isArray(parsed.todos)) {
+        const existing = new Set(
+          (db
+            .prepare("SELECT text FROM todos WHERE project_id = ? AND status = 'pending'")
+            .all(project.id) as { text: string }[]).map((t) => t.text)
+        );
+        for (const t of parsed.todos.slice(0, 3)) {
+          if (t && t.trim() && !existing.has(t.trim())) {
+            db.prepare(
+              "INSERT INTO todos (project_id, text, status, source, created_at) VALUES (?, ?, 'pending', 'nav', ?)"
+            ).run(project.id, t.trim(), now());
+          }
+        }
+      }
       // 进展纪要 → 自动入档（confirmed，成为全员共享事实）+ 时间线
       if (parsed.summary && parsed.summary.trim()) {
         const ts = now();

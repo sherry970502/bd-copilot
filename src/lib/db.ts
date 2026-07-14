@@ -57,9 +57,21 @@ CREATE TABLE IF NOT EXISTS messages (
   stage_key TEXT NOT NULL,
   role TEXT NOT NULL,
   content TEXT NOT NULL,
+  artifact_id INTEGER,
   ts TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_messages_project ON messages(project_id, stage_key);
+
+CREATE TABLE IF NOT EXISTS todos (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  project_id INTEGER NOT NULL,
+  text TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'pending',
+  source TEXT,
+  created_at TEXT NOT NULL,
+  done_at TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_todos_project ON todos(project_id);
 
 CREATE TABLE IF NOT EXISTS usage_events (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -96,6 +108,10 @@ function migrate(db: Database.Database) {
   const have = new Set(cols.map((c) => c.name));
   for (const col of ["situation", "plan"]) {
     if (!have.has(col)) db.exec(`ALTER TABLE projects ADD COLUMN ${col} TEXT`);
+  }
+  const msgCols = db.prepare("PRAGMA table_info(messages)").all() as { name: string }[];
+  if (msgCols.length > 0 && !msgCols.some((c) => c.name === "artifact_id")) {
+    db.exec(`ALTER TABLE messages ADD COLUMN artifact_id INTEGER`);
   }
 }
 

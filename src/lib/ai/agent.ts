@@ -23,7 +23,43 @@ const COMMON_PROTOCOL = `
 <artifact title="交付物标题">
 （Markdown 格式的交付物正文）
 </artifact>
-- 标签外可以写简短的说明或下一步建议；闲聊、答疑、陪练对话不要用 artifact 标签`;
+- 标签外可以写简短的说明或下一步建议；闲聊、答疑、陪练对话不要用 artifact 标签
+
+—— 交付物三条硬规则 ——
+1. **一页纸结构**：开头必须是「## 拿来即用」——用户可直接照做/照读/照发的部分；背景分析与理由放在其后的「## 为什么这么做」，能短则短
+2. **事实与假设分离**：正文只写有档案依据的内容；所有推测集中到末尾「## ⚠️ 待验证清单」，每条附一句验证方法（如"下次沟通问 X 即可确认"），严禁把假设混进正文当事实
+3. **必须给推荐**：凡是给出多个方案/版本，结尾必须有一行「👉 如果只选一个：选 X，因为…」——用户没有经验，不要把选择难题抛回给他
+
+—— 群聊须知 ——
+你在一个项目群里和领航员、其他专员共事，历史消息里【】标注了发言者。你只以自己的专业身份发言，不要代替别人的职责；发现问题属于别的专员，明确建议用户找他。`;
+
+/** 统一群聊历史：取最近 N 条（跨全部角色），标注发言者并合并连续同角色消息 */
+export function buildHistory(projectId: number, limit = 15): { role: "user" | "assistant"; content: string }[] {
+  const db = getDb();
+  const rows = (
+    db
+      .prepare(
+        "SELECT stage_key, role, content FROM messages WHERE project_id = ? ORDER BY id DESC LIMIT ?"
+      )
+      .all(projectId, limit) as { stage_key: string; role: "user" | "assistant"; content: string }[]
+  ).reverse();
+  const merged: { role: "user" | "assistant"; content: string }[] = [];
+  for (const m of rows) {
+    const speaker =
+      m.role === "assistant"
+        ? m.stage_key === "nav"
+          ? "【领航员】"
+          : `【${getStage(m.stage_key)?.agent?.name ?? m.stage_key}】`
+        : "";
+    const content = `${speaker}${m.content}`;
+    const last = merged[merged.length - 1];
+    if (last && last.role === m.role) last.content += `\n\n${content}`;
+    else merged.push({ role: m.role, content });
+  }
+  // API 要求首条为 user
+  while (merged.length > 0 && merged[0].role !== "user") merged.shift();
+  return merged;
+}
 
 function buildContext(project: Project, stageKey: string): string {
   const db = getDb();
@@ -82,14 +118,8 @@ export async function runAgent(
     "INSERT INTO messages (project_id, stage_key, role, content, ts) VALUES (?, ?, 'user', ?, ?)"
   ).run(project.id, stageKey, userMessage, ts);
 
-  // 本环节最近 12 条历史（不含刚插入的这条，稍后拼接）
-  const history = (
-    db
-      .prepare(
-        "SELECT role, content FROM messages WHERE project_id = ? AND stage_key = ? ORDER BY id DESC LIMIT 13"
-      )
-      .all(project.id, stageKey) as { role: "user" | "assistant"; content: string }[]
-  ).reverse();
+  // 统一群聊历史（跨全部角色，含刚插入的用户消息）
+  const history = buildHistory(project.id);
 
   const methodology = task
     ? `本次执行专项任务：「${task.label}」，方法论如下（严格遵循）：
@@ -116,7 +146,8 @@ ${buildContext(project, stageKey)}`;
       : {}),
     messages: history.map((m) => ({ role: m.role, content: m.content })),
   });
-  const raw = messageText(message);
+  // 模型偶尔学舌历史格式在开头带【发言者】前缀，剥掉
+  const raw = messageText(message).replace(/^【[^】]{1,12}】\s*/, "");
   if (!raw.trim()) throw new Error(`专员没有返回内容（stop_reason: ${message.stop_reason}）`);
 
   // 提取产出物
@@ -132,13 +163,13 @@ ${buildContext(project, stageKey)}`;
       )
       .run(project.id, stageKey, title, content, now(), now());
     artifact = { id: Number(info.lastInsertRowid), title, content };
-    display = raw.replace(m[0], `📄 已产出：**${title}**（见右侧产出物栏，确认后会进入项目档案供后续环节使用）`);
+    display = raw.replace(m[0], "").trim() || `已完成「${title}」。`;
     trackEvent("artifact_created", title, project.id, stageKey);
   }
 
   db.prepare(
-    "INSERT INTO messages (project_id, stage_key, role, content, ts) VALUES (?, ?, 'assistant', ?, ?)"
-  ).run(project.id, stageKey, display, now());
+    "INSERT INTO messages (project_id, stage_key, role, content, artifact_id, ts) VALUES (?, ?, 'assistant', ?, ?, ?)"
+  ).run(project.id, stageKey, display, artifact?.id ?? null, now());
   db.prepare("UPDATE projects SET updated_at = ? WHERE id = ?").run(now(), project.id);
 
   return { text: display, artifact };
