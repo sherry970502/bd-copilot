@@ -238,9 +238,10 @@ export default function ProjectPage() {
   const pendingTodos = todos.filter((t) => t.status === "pending");
   const artifactById = new Map(artifacts.map((a) => [a.id, a]));
 
-  async function send(text: string, taskKey?: string, forceNav = false) {
+  /** target: undefined=当前对话对象；"nav"=领航员；其他=指定专员（下一步按钮/深化用） */
+  async function send(text: string, taskKey?: string, target?: string) {
     if (!text.trim() || busy) return;
-    const agent = forceNav ? "" : activeAgent;
+    const agent = target === undefined ? activeAgent : target === "nav" ? "" : target;
     const task = taskKey ?? pendingTask ?? undefined;
     setBusyWebSearch(!!getStage(agent)?.tasks?.find((t) => t.key === task)?.webSearch);
     setPendingTask(null);
@@ -249,7 +250,7 @@ export default function ProjectPage() {
     setInput("");
     setMessages((m) => [
       ...m,
-      { id: -1, project_id: projectId, stage_key: agent || "nav", role: "user", content: text, artifact_id: null, ts: "" },
+      { id: -1, project_id: projectId, stage_key: agent || "nav", role: "user", content: text, artifact_id: null, next_json: null, ts: "" },
     ]);
     const res = agent
       ? await fetch(`/api/projects/${projectId}/chat`, {
@@ -444,7 +445,7 @@ export default function ProjectPage() {
                           busy={busy}
                           onDeepen={(text) => {
                             setActiveAgent("");
-                            send(text, undefined, true);
+                            send(text, undefined, "nav");
                           }}
                         />
                       ) : art ? (
@@ -458,6 +459,42 @@ export default function ProjectPage() {
                           </div>
                         </button>
                       ) : null}
+                      {/* 下一步：项目没做完就没有终点消息 */}
+                      {m.next_json && (() => {
+                        let items: { to: string; stage?: string; task?: string | null; action: string }[] = [];
+                        try { items = JSON.parse(m.next_json); } catch { return null; }
+                        if (items.length === 0) return null;
+                        const isLatest = i === messages.length - 1;
+                        return (
+                          <div className="mt-2.5 pt-2 border-t border-line/60 flex flex-col gap-1.5">
+                            <span className="text-[10px] text-muted font-semibold">⏭ 下一步</span>
+                            {items.map((n, j) =>
+                              n.to === "ai" && n.stage ? (
+                                <button
+                                  key={j}
+                                  disabled={busy || !isLatest}
+                                  onClick={() => {
+                                    setActiveAgent(n.stage!);
+                                    send(n.action, n.task ?? undefined, n.stage);
+                                  }}
+                                  className={`text-left text-[12px] border rounded-lg px-3 py-1.5 ${
+                                    isLatest
+                                      ? "border-accent/50 text-accent hover:bg-accent/10"
+                                      : "border-line text-muted/60 cursor-default"
+                                  }`}
+                                >
+                                  → 让{speakerOf(n.stage).name}：{n.action}
+                                  {isLatest ? "（点我执行）" : ""}
+                                </button>
+                              ) : (
+                                <span key={j} className="text-[11px] text-muted">
+                                  👤 {n.action} <span className="text-[9px]">（已进你的待办）</span>
+                                </span>
+                              )
+                            )}
+                          </div>
+                        );
+                      })()}
                     </div>
                   </div>
                 </div>

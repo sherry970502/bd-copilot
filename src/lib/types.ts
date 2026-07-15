@@ -89,7 +89,17 @@ export interface ChatMessage {
   content: string;
   /** 该消息产出的产出物（流内渲染成卡片） */
   artifact_id: number | null;
+  /** 该消息的"下一步"（JSON NextItem[]）：AI 项渲染为一键执行按钮，人类项已进待办 */
+  next_json: string | null;
   ts: string;
+}
+
+/** 每次交付末尾的下一步：项目没做完就没有终点消息 */
+export interface NextItem {
+  to: "ai" | "human";
+  stage?: string;
+  task?: string | null;
+  action: string;
 }
 
 /** 人类待办：AI 能干的都交给 AI，需要人拍板/动手的进这里 */

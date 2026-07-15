@@ -31,7 +31,14 @@ const COMMON_PROTOCOL = `
 3. **必须给推荐**：凡是给出多个方案/版本，结尾必须有一行「👉 如果只选一个：选 X，因为…」——用户没有经验，不要把选择难题抛回给他
 
 —— 群聊须知 ——
-你在一个项目群里和领航员、其他专员共事，历史消息里【】标注了发言者。你只以自己的专业身份发言，不要代替别人的职责；发现问题属于别的专员，明确建议用户找他。`;
+你在一个项目群里和领航员、其他专员共事，历史消息里【】标注了发言者。你只以自己的专业身份发言，不要代替别人的职责；发现问题属于别的专员，明确建议用户找他。
+
+—— 下一步义务（项目没做完就没有终点消息）——
+每次回复的最后，另起一行输出机器块（用户看不到）：
+<next>[{"to":"ai","stage":"环节key","task":"任务key或null","action":"让哪位专员做什么，一句话"},{"to":"human","action":"需要用户做什么，一句话"}]</next>
+- 1-2 项，指向此刻最该发生的事：AI 能干的用 to:"ai"（系统会渲染成一键执行按钮），只有人能干的用 to:"human"（自动进用户待办）
+- 环节key 可选：research/icebreak/discovery/proposal/negotiation/contract
+- 纯闲聊答疑、或陪练进行中时可以输出空数组 []；JSON 必须语法合法`;
 
 /** 统一群聊历史：取最近 N 条（跨全部角色），标注发言者并合并连续同角色消息 */
 export function buildHistory(projectId: number, limit = 15): { role: "user" | "assistant"; content: string }[] {
@@ -203,9 +210,46 @@ ${buildContext(project, stageKey)}`;
     }
   }
 
+  // 下一步义务：解析 <next>，human 项进待办，ai 项挂到消息上渲染为一键执行按钮
+  let nextJson: string | null = null;
+  const nm = display.match(/<next>([\s\S]*?)<\/next>/);
+  if (nm) {
+    display = display.replace(nm[0], "").trim();
+    try {
+      const items = (JSON.parse(nm[1]) as { to?: string; stage?: string; task?: string | null; action?: string }[])
+        .filter((x) => x.action?.trim() && (x.to === "ai" || x.to === "human"))
+        .slice(0, 2);
+      const aiItems = items.filter(
+        (x) => x.to === "ai" && x.stage && getStage(x.stage)?.agent
+      );
+      const humanItems = items.filter((x) => x.to === "human");
+      if (humanItems.length > 0) {
+        const existing = new Set(
+          (db
+            .prepare("SELECT text FROM todos WHERE project_id = ? AND status = 'pending'")
+            .all(project.id) as { text: string }[]).map((t) => t.text)
+        );
+        for (const h of humanItems) {
+          if (!existing.has(h.action!.trim())) {
+            db.prepare(
+              "INSERT INTO todos (project_id, text, status, source, created_at) VALUES (?, ?, 'pending', ?, ?)"
+            ).run(project.id, h.action!.trim(), `agent:${stageKey}`, now());
+          }
+        }
+      }
+      const all = [
+        ...aiItems.map((x) => ({ to: "ai", stage: x.stage, task: x.task ?? null, action: x.action!.trim() })),
+        ...humanItems.map((x) => ({ to: "human", action: x.action!.trim() })),
+      ];
+      if (all.length > 0) nextJson = JSON.stringify(all);
+    } catch {
+      // 机器块坏了不影响正文
+    }
+  }
+
   db.prepare(
-    "INSERT INTO messages (project_id, stage_key, role, content, artifact_id, ts) VALUES (?, ?, 'assistant', ?, ?, ?)"
-  ).run(project.id, stageKey, display, artifact?.id ?? null, now());
+    "INSERT INTO messages (project_id, stage_key, role, content, artifact_id, next_json, ts) VALUES (?, ?, 'assistant', ?, ?, ?, ?)"
+  ).run(project.id, stageKey, display, artifact?.id ?? null, nextJson, now());
   db.prepare("UPDATE projects SET updated_at = ? WHERE id = ?").run(now(), project.id);
 
   return { text: display, artifact };

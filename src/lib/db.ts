@@ -59,6 +59,7 @@ CREATE TABLE IF NOT EXISTS messages (
   role TEXT NOT NULL,
   content TEXT NOT NULL,
   artifact_id INTEGER,
+  next_json TEXT,
   ts TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_messages_project ON messages(project_id, stage_key);
@@ -113,6 +114,9 @@ function migrate(db: Database.Database) {
   const msgCols = db.prepare("PRAGMA table_info(messages)").all() as { name: string }[];
   if (msgCols.length > 0 && !msgCols.some((c) => c.name === "artifact_id")) {
     db.exec(`ALTER TABLE messages ADD COLUMN artifact_id INTEGER`);
+  }
+  if (msgCols.length > 0 && !msgCols.some((c) => c.name === "next_json")) {
+    db.exec(`ALTER TABLE messages ADD COLUMN next_json TEXT`);
   }
   const artCols = db.prepare("PRAGMA table_info(artifacts)").all() as { name: string }[];
   if (artCols.length > 0 && !artCols.some((c) => c.name === "kind")) {

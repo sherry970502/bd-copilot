@@ -234,9 +234,14 @@ export async function runNavigator(project: Project, userMessage: string): Promi
     }
   }
 
+  // 领航员的 next 同样挂到气泡上（一键找对应专员），对话流里永远有下一步
+  const navNextJson =
+    plan && plan.next.length > 0
+      ? JSON.stringify(plan.next.map((n) => ({ to: "ai", stage: n.stage, task: null, action: n.action })))
+      : null;
   db.prepare(
-    "INSERT INTO messages (project_id, stage_key, role, content, ts) VALUES (?, 'nav', 'assistant', ?, ?)"
-  ).run(project.id, display, now());
+    "INSERT INTO messages (project_id, stage_key, role, content, next_json, ts) VALUES (?, 'nav', 'assistant', ?, ?, ?)"
+  ).run(project.id, display, navNextJson, now());
   db.prepare("UPDATE projects SET updated_at = ? WHERE id = ?").run(now(), project.id);
 
   // 执行派单：专员紧接着在群里交活（失败不影响领航员回复，记入时间线）
