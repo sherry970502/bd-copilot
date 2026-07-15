@@ -105,7 +105,11 @@ export async function runAgent(
   project: Project,
   stageKey: string,
   userMessage: string,
-  taskKey?: string
+  taskKey?: string,
+  opts?: {
+    /** false=领航员派单模式：指令不落库为用户消息（避免冒充用户发言），仅临时注入本次调用 */
+    persistUser?: boolean;
+  }
 ): Promise<AgentReply> {
   const stage = getStage(stageKey);
   if (!stage?.agent) throw new Error("该环节暂未开放");
@@ -113,13 +117,19 @@ export async function runAgent(
   const task = taskKey ? getTask(stageKey, taskKey) : undefined;
   const db = getDb();
   const ts = now();
+  const persistUser = opts?.persistUser !== false;
 
-  db.prepare(
-    "INSERT INTO messages (project_id, stage_key, role, content, ts) VALUES (?, ?, 'user', ?, ?)"
-  ).run(project.id, stageKey, userMessage, ts);
+  if (persistUser) {
+    db.prepare(
+      "INSERT INTO messages (project_id, stage_key, role, content, ts) VALUES (?, ?, 'user', ?, ?)"
+    ).run(project.id, stageKey, userMessage, ts);
+  }
 
-  // 统一群聊历史（跨全部角色，含刚插入的用户消息）
+  // 统一群聊历史（跨全部角色）；派单模式把领航员指令临时注入为本次调用的最后一条
   const history = buildHistory(project.id);
+  if (!persistUser) {
+    history.push({ role: "user", content: `【领航员派单，请直接执行】${userMessage}` });
+  }
 
   const methodology = task
     ? `本次执行专项任务：「${task.label}」，方法论如下（严格遵循）：

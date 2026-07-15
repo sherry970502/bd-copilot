@@ -6,9 +6,9 @@ import {
   streamWithServerTools,
   messageText,
 } from "./client";
-import { STAGES, getStage } from "../scene-pack";
+import { STAGES, getStage, getTask } from "../scene-pack";
 import { getProfile } from "../profile";
-import { buildHistory } from "./agent";
+import { buildHistory, runAgent } from "./agent";
 import type { NavPlan, Project, ProjectStatus, Artifact } from "../types";
 
 /**
@@ -31,8 +31,9 @@ const NAV_SYSTEM_BASE = `你是「领航员」——用户的 BD 项目总调度
 - 用户闲聊或提问时正常回答，不必每次都动计划
 
 **机器可读块**：每次回复的最后，另起一行输出（用户看不到，不算回复正文）：
-<nav>{"summary":"若用户带来了新的事实性进展，用 50 字内提炼成纪要，否则 null","plan":[{"stage":"环节key","needed":true或false,"reason":"一句话理由"}],"next":[{"stage":"环节key","action":"具体要做的事，一句话"}],"todos":["只有人能做的事（发出邮件/赴约/内部拍板/等对方答复），0-3 条，AI 能干的绝不放进来"],"status":"active|waiting|won|shelved 或 null（仅在建议变更项目状态时给值）"}</nav>
+<nav>{"summary":"若用户带来了新的事实性进展，用 50 字内提炼成纪要，否则 null","plan":[{"stage":"环节key","needed":true或false,"reason":"一句话理由"}],"next":[{"stage":"环节key","action":"具体要做的事，一句话"}],"dispatch":{"stage":"环节key","task":"任务key 或 null","instruction":"给该专员的具体工作指令"} 或 null,"todos":["只有人能做的事（发出邮件/赴约/内部拍板/等对方答复），0-3 条，AI 能干的绝不放进来"],"status":"active|waiting|won|shelved 或 null（仅在建议变更项目状态时给值）"}</nav>
 - plan 必须包含全部可用环节（{STAGE_KEYS}）；next 给 1-2 项，stage 必须取自可用环节
+- **dispatch 是你的派单权**：下一步如果 AI 现在就能干（档案里材料足够、不需要用户提供新材料或拍板），直接派单，对应专员会立刻在群里交活——不要让用户自己去点。判断标准：需要用户粘贴材料/给新信息/先做人间动作的，不派单（放 next 或 todos）。每次最多派一单；回复正文里顺口说一句"我已经叫X去做了"
 - todos 是「人类待办区」：判断标准是"这件事 AI 无法代劳"——需要用户去真实世界执行或拍板的才列，且不与已有待办重复
 - JSON 必须语法合法，字符串内不要用未转义英文双引号`;
 
@@ -40,7 +41,7 @@ function stageList(): string {
   return STAGES.filter((s) => !s.coming)
     .map(
       (s) =>
-        `- ${s.key}（${s.name}）：${s.description}——专员：${s.agent?.name}，可交付任务：${(s.tasks ?? []).map((t) => t.label).join("、")}`
+        `- ${s.key}（${s.name}）：${s.description}——专员：${s.agent?.name}，可交付任务：${(s.tasks ?? []).map((t) => `${t.label}(${t.key})`).join("、")}`
     )
     .join("\n");
 }
@@ -84,6 +85,8 @@ export interface NavReply {
   text: string;
   plan: NavPlan | null;
   status: ProjectStatus | null;
+  /** 领航员派单后，专员的交活结果（已同步写入群聊流） */
+  dispatched: { stage: string; agentName: string } | null;
 }
 
 export async function runNavigator(project: Project, userMessage: string): Promise<NavReply> {
@@ -117,6 +120,7 @@ export async function runNavigator(project: Project, userMessage: string): Promi
   // 解析机器块
   let plan: NavPlan | null = null;
   let status: ProjectStatus | null = null;
+  let dispatch: { stage: string; task: string | null; instruction: string } | null = null;
   let display = raw;
   const m = raw.match(/<nav>([\s\S]*?)<\/nav>/);
   if (m) {
@@ -126,9 +130,26 @@ export async function runNavigator(project: Project, userMessage: string): Promi
         summary?: string | null;
         plan?: { stage?: string; needed?: boolean; reason?: string }[];
         next?: { stage?: string; action?: string }[];
+        dispatch?: { stage?: string; task?: string | null; instruction?: string } | null;
         todos?: string[];
         status?: string | null;
       };
+      // 派单：校验环节与任务合法性，稍后（领航员消息落库后）执行
+      if (
+        parsed.dispatch?.stage &&
+        availableKeys.includes(parsed.dispatch.stage) &&
+        parsed.dispatch.instruction?.trim()
+      ) {
+        const taskKey =
+          parsed.dispatch.task && getTask(parsed.dispatch.stage, parsed.dispatch.task)
+            ? parsed.dispatch.task
+            : null;
+        dispatch = {
+          stage: parsed.dispatch.stage,
+          task: taskKey,
+          instruction: parsed.dispatch.instruction.trim(),
+        };
+      }
       // 人类待办：只收 AI 无法代劳的事，与未完成待办去重
       if (Array.isArray(parsed.todos)) {
         const existing = new Set(
@@ -190,5 +211,24 @@ export async function runNavigator(project: Project, userMessage: string): Promi
   ).run(project.id, display, now());
   db.prepare("UPDATE projects SET updated_at = ? WHERE id = ?").run(now(), project.id);
 
-  return { text: display, plan, status };
+  // 执行派单：专员紧接着在群里交活（失败不影响领航员回复，记入时间线）
+  let dispatched: NavReply["dispatched"] = null;
+  if (dispatch) {
+    const agentName = getStage(dispatch.stage)?.agent?.name ?? dispatch.stage;
+    try {
+      await runAgent(project, dispatch.stage, dispatch.instruction, dispatch.task ?? undefined, {
+        persistUser: false,
+      });
+      dispatched = { stage: dispatch.stage, agentName };
+      trackEvent("nav_dispatch", `${dispatch.stage}:${dispatch.task ?? "-"}`, project.id, "nav");
+    } catch (e) {
+      addTimeline(
+        project.id,
+        "status",
+        `派单给${agentName}未完成（${e instanceof Error ? e.message.slice(0, 60) : "出错"}），可稍后让领航员重派`
+      );
+    }
+  }
+
+  return { text: display, plan, status, dispatched };
 }

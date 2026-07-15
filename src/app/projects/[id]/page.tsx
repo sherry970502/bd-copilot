@@ -314,7 +314,9 @@ export default function ProjectPage() {
             })}
             {busy && (
               <div className="text-xs text-accent animate-pulse flex items-center gap-1.5">
-                {activeAgent ? `${agentDef?.agent?.emoji} ${agentDef?.agent?.name}工作中…` : "🧭 领航员思考中…"}
+                {activeAgent
+                  ? `${agentDef?.agent?.emoji} ${agentDef?.agent?.name}工作中…`
+                  : "🧭 领航员调度中…（如需要会当场派单给专员接着交活，可能 1-2 分钟）"}
                 {busyWebSearch ? "（含联网搜索，约 1-2 分钟）" : ""}
               </div>
             )}
@@ -331,16 +333,22 @@ export default function ProjectPage() {
               >
                 🧭 领航员
               </button>
+              <span className="text-[10px] text-muted/60">｜直接点名：</span>
               {STAGES.filter((s) => !s.coming && s.agent).map((s) => (
                 <button
                   key={s.key}
                   onClick={() => { setActiveAgent(s.key); setPendingTask(null); }}
-                  className={`text-[11px] border rounded-lg px-2.5 py-1 ${activeAgent === s.key ? "border-accent bg-accent text-white font-bold" : "border-line text-muted hover:text-foreground"}`}
+                  className={`text-[11px] border rounded-lg px-2 py-1 ${activeAgent === s.key ? "border-accent bg-accent text-white font-bold" : "border-line/70 text-muted/80 hover:text-foreground"}`}
                   title={s.agent!.intro}
                 >
-                  {s.agent!.emoji} {s.agent!.name}
+                  {s.agent!.emoji} {activeAgent === s.key ? s.agent!.name : ""}
                 </button>
               ))}
+              {activeAgent && (
+                <span className="text-[10px] text-muted ml-1">
+                  正在直接对话{agentDef?.agent?.name}（跳过领航员调度）
+                </span>
+              )}
             </div>
             {agentDef?.tasks && (
               <div className="flex flex-wrap gap-1.5">
