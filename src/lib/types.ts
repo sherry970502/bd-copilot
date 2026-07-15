@@ -64,8 +64,20 @@ export interface Artifact {
   title: string;
   content: string;
   status: "draft" | "confirmed";
+  /** doc=普通文档；directions=方向集（content 为 JSON，UI 渲染成可勾选卡片） */
+  kind: "doc" | "directions" | null;
   created_at: string;
   updated_at: string;
+}
+
+/** 方向集中的一个切入方向（发散→用户筛选→深化 的载体） */
+export interface Direction {
+  title: string;
+  hook: string;
+  give: string;
+  get: string;
+  risk: string;
+  recommended?: boolean;
 }
 
 export interface ChatMessage {

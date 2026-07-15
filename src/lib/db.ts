@@ -46,6 +46,7 @@ CREATE TABLE IF NOT EXISTS artifacts (
   title TEXT NOT NULL,
   content TEXT NOT NULL,
   status TEXT NOT NULL DEFAULT 'draft',
+  kind TEXT DEFAULT 'doc',
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );
@@ -112,6 +113,10 @@ function migrate(db: Database.Database) {
   const msgCols = db.prepare("PRAGMA table_info(messages)").all() as { name: string }[];
   if (msgCols.length > 0 && !msgCols.some((c) => c.name === "artifact_id")) {
     db.exec(`ALTER TABLE messages ADD COLUMN artifact_id INTEGER`);
+  }
+  const artCols = db.prepare("PRAGMA table_info(artifacts)").all() as { name: string }[];
+  if (artCols.length > 0 && !artCols.some((c) => c.name === "kind")) {
+    db.exec(`ALTER TABLE artifacts ADD COLUMN kind TEXT DEFAULT 'doc'`);
   }
 }
 

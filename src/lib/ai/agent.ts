@@ -160,21 +160,40 @@ ${buildContext(project, stageKey)}`;
   const raw = messageText(message).replace(/^【[^】]{1,12}】\s*/, "");
   if (!raw.trim()) throw new Error(`专员没有返回内容（stop_reason: ${message.stop_reason}）`);
 
-  // 提取产出物
+  // 提取产出物（doc 文档 或 directions 方向集）
   let artifact: AgentReply["artifact"] = null;
-  const m = raw.match(/<artifact title="([^"]*)">([\s\S]*?)<\/artifact>/);
   let display = raw;
+  const m = raw.match(/<artifact title="([^"]*)">([\s\S]*?)<\/artifact>/);
+  const dm = raw.match(/<directions title="([^"]*)">([\s\S]*?)<\/directions>/);
   if (m) {
     const title = m[1].trim() || "未命名产出物";
     const content = m[2].trim();
     const info = db
       .prepare(
-        "INSERT INTO artifacts (project_id, stage_key, title, content, status, created_at, updated_at) VALUES (?, ?, ?, ?, 'draft', ?, ?)"
+        "INSERT INTO artifacts (project_id, stage_key, title, content, status, kind, created_at, updated_at) VALUES (?, ?, ?, ?, 'draft', 'doc', ?, ?)"
       )
       .run(project.id, stageKey, title, content, now(), now());
     artifact = { id: Number(info.lastInsertRowid), title, content };
     display = raw.replace(m[0], "").trim() || `已完成「${title}」。`;
     trackEvent("artifact_created", title, project.id, stageKey);
+  } else if (dm) {
+    // 方向集：校验 JSON 后按 directions 类型入库（UI 渲染为可勾选卡片，直接 confirmed——它本身就是给用户筛选的）
+    const title = dm[1].trim() || "切入方向集";
+    try {
+      const arr = JSON.parse(dm[2].trim()) as unknown[];
+      if (!Array.isArray(arr) || arr.length === 0) throw new Error("空方向集");
+      const content = JSON.stringify(arr);
+      const info = db
+        .prepare(
+          "INSERT INTO artifacts (project_id, stage_key, title, content, status, kind, created_at, updated_at) VALUES (?, ?, ?, ?, 'confirmed', 'directions', ?, ?)"
+        )
+        .run(project.id, stageKey, title, content, now(), now());
+      artifact = { id: Number(info.lastInsertRowid), title, content };
+      display = raw.replace(dm[0], "").trim() || `方向集已就绪，在下方挑 1-3 个你觉得对的。`;
+      trackEvent("directions_created", title, project.id, stageKey);
+    } catch {
+      display = raw.replace(dm[0], "（方向集格式异常，请让专员重出一版）").trim();
+    }
   }
 
   db.prepare(

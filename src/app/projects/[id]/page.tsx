@@ -9,6 +9,7 @@ import {
   PROJECT_STATUS_LABELS,
   type Artifact,
   type ChatMessage,
+  type Direction,
   type NavPlan,
   type Project,
   type ProjectStage,
@@ -16,6 +17,89 @@ import {
   type TimelineEvent,
   type Todo,
 } from "@/lib/types";
+
+function parseDirections(a: Artifact): Direction[] {
+  try {
+    const arr = JSON.parse(a.content);
+    return Array.isArray(arr) ? arr : [];
+  } catch {
+    return [];
+  }
+}
+
+/** 方向集卡片选择器：发散 → 用户勾选 → 交回领航员深化 */
+function DirectionsPicker({
+  artifact,
+  busy,
+  onDeepen,
+}: {
+  artifact: Artifact;
+  busy: boolean;
+  onDeepen: (text: string) => void;
+}) {
+  const [sel, setSel] = useState<Set<number>>(new Set());
+  const [feedback, setFeedback] = useState("");
+  const dirs = parseDirections(artifact);
+  if (dirs.length === 0) return null;
+  return (
+    <div className="mt-2 flex flex-col gap-2">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        {dirs.map((d, i) => {
+          const on = sel.has(i);
+          return (
+            <button
+              key={i}
+              onClick={() => {
+                const next = new Set(sel);
+                if (on) next.delete(i);
+                else next.add(i);
+                setSel(next);
+              }}
+              className={`text-left border rounded-xl px-3 py-2.5 transition-all ${
+                on ? "border-accent bg-accent/10" : "border-line bg-panel2/60 hover:border-accent/50"
+              }`}
+            >
+              <div className="flex items-center gap-1.5">
+                <span className={`text-[13px] ${on ? "text-accent" : ""}`}>{on ? "☑" : "☐"}</span>
+                <span className="text-[12px] font-bold flex-1">{d.title}</span>
+                {d.recommended && (
+                  <span className="text-[9px] border border-accent/40 bg-accent/10 text-accent rounded-full px-1.5 py-0.5">
+                    推荐
+                  </span>
+                )}
+              </div>
+              <p className="text-[11px] text-foreground/80 mt-1 leading-snug">💡 {d.hook}</p>
+              <p className="text-[10px] text-muted mt-1 leading-snug">给：{d.give}｜要：{d.get}</p>
+              <p className="text-[10px] text-warn/90 mt-0.5 leading-snug">⚠ {d.risk}</p>
+            </button>
+          );
+        })}
+      </div>
+      <div className="flex gap-2 items-end">
+        <input
+          value={feedback}
+          onChange={(e) => setFeedback(e.target.value)}
+          placeholder="（可选）对选中方向的调整意见，如：方向二里别提分成"
+          className="flex-1 bg-panel2 border border-line rounded-lg px-2.5 py-1.5 text-[11px] outline-none focus:border-accent"
+        />
+        <button
+          disabled={busy || sel.size === 0}
+          onClick={() => {
+            const chosen = [...sel].map((i) => dirs[i].title);
+            onDeepen(
+              `我在「${artifact.title}」里选定了：${chosen.map((t) => `「${t}」`).join("、")}。${feedback.trim() ? `调整意见：${feedback.trim()}。` : ""}请安排深化：每个选定方向给出可执行的详细方案（怎么谈、拿什么说服对方、下一步动作）。`
+            );
+            setSel(new Set());
+            setFeedback("");
+          }}
+          className="bg-accent text-white font-semibold text-[11px] rounded-lg px-3.5 py-1.5 disabled:opacity-40 hover:opacity-90 whitespace-nowrap"
+        >
+          深化选中（{sel.size}）→
+        </button>
+      </div>
+    </div>
+  );
+}
 
 const TIMELINE_ICON: Record<string, string> = {
   created: "🚀",
@@ -97,23 +181,24 @@ export default function ProjectPage() {
   const pendingTodos = todos.filter((t) => t.status === "pending");
   const artifactById = new Map(artifacts.map((a) => [a.id, a]));
 
-  async function send(text: string, taskKey?: string) {
+  async function send(text: string, taskKey?: string, forceNav = false) {
     if (!text.trim() || busy) return;
+    const agent = forceNav ? "" : activeAgent;
     const task = taskKey ?? pendingTask ?? undefined;
-    setBusyWebSearch(!!agentDef?.tasks?.find((t) => t.key === task)?.webSearch);
+    setBusyWebSearch(!!getStage(agent)?.tasks?.find((t) => t.key === task)?.webSearch);
     setPendingTask(null);
     setBusy(true);
     setError("");
     setInput("");
     setMessages((m) => [
       ...m,
-      { id: -1, project_id: projectId, stage_key: activeAgent || "nav", role: "user", content: text, artifact_id: null, ts: "" },
+      { id: -1, project_id: projectId, stage_key: agent || "nav", role: "user", content: text, artifact_id: null, ts: "" },
     ]);
-    const res = activeAgent
+    const res = agent
       ? await fetch(`/api/projects/${projectId}/chat`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ stage: activeAgent, message: text, task }),
+          body: JSON.stringify({ stage: agent, message: text, task }),
         })
       : await fetch(`/api/projects/${projectId}/nav`, {
           method: "POST",
@@ -296,7 +381,16 @@ export default function ProjectPage() {
                       <div className="prose-sm [&_p]:my-1.5 [&_ul]:my-1.5 [&_h2]:text-sm [&_h2]:font-bold">
                         <ReactMarkdown>{m.content}</ReactMarkdown>
                       </div>
-                      {art && (
+                      {art && art.kind === "directions" ? (
+                        <DirectionsPicker
+                          artifact={art}
+                          busy={busy}
+                          onDeepen={(text) => {
+                            setActiveAgent("");
+                            send(text, undefined, true);
+                          }}
+                        />
+                      ) : art ? (
                         <button
                           onClick={() => setViewArtifact(art)}
                           className="mt-2 w-full text-left border border-accent/30 bg-accent/5 rounded-xl px-3 py-2.5 hover:bg-accent/10 transition-colors"
@@ -306,7 +400,7 @@ export default function ProjectPage() {
                             {art.status === "confirmed" ? "✓ 已入档" : "草稿——点开查看，确认后入档供全员使用"}
                           </div>
                         </button>
-                      )}
+                      ) : null}
                     </div>
                   </div>
                 </div>
@@ -516,7 +610,23 @@ export default function ProjectPage() {
               <button onClick={() => setViewArtifact(null)} className="text-muted hover:text-foreground text-lg px-1">✕</button>
             </div>
             <div className="overflow-y-auto p-5 prose-sm [&_h2]:text-base [&_h2]:font-bold [&_p]:my-2 [&_table]:text-xs">
-              <ReactMarkdown>{viewArtifact.content}</ReactMarkdown>
+              {viewArtifact.kind === "directions" ? (
+                <div className="flex flex-col gap-2 not-prose">
+                  {parseDirections(viewArtifact).map((d, i) => (
+                    <div key={i} className="border border-line rounded-xl px-3 py-2.5 bg-panel2/60">
+                      <div className="text-[13px] font-bold">
+                        {d.title}
+                        {d.recommended && <span className="ml-2 text-[9px] border border-accent/40 bg-accent/10 text-accent rounded-full px-1.5 py-0.5">推荐</span>}
+                      </div>
+                      <p className="text-[11px] mt-1">💡 {d.hook}</p>
+                      <p className="text-[10px] text-muted mt-1">给：{d.give}｜要：{d.get}</p>
+                      <p className="text-[10px] text-warn/90 mt-0.5">⚠ {d.risk}</p>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <ReactMarkdown>{viewArtifact.content}</ReactMarkdown>
+              )}
             </div>
           </div>
         </div>
