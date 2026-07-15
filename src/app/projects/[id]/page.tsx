@@ -178,8 +178,21 @@ export default function ProjectPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [showMap, setShowMap] = useState(false);
+  /** 右栏整栏收起（向右滑走，留细条），状态记 localStorage */
+  const [railOpen, setRailOpen] = useState(true);
   const [viewArtifact, setViewArtifact] = useState<Artifact | null>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const saved = localStorage.getItem("bdc_rail_open");
+    if (saved !== null) setRailOpen(saved === "1");
+  }, []);
+  function toggleRail() {
+    setRailOpen((v) => {
+      localStorage.setItem("bdc_rail_open", v ? "0" : "1");
+      return !v;
+    });
+  }
 
   // 切换项目时清空全部状态（防串台）
   useEffect(() => {
@@ -552,8 +565,39 @@ export default function ProjectPage() {
           </div>
         </div>
 
-        {/* ============ 右栏：人类待办 + 时间线 + 档案 ============ */}
-        <aside className="w-80 min-h-0 border-l border-line bg-panel/40 overflow-y-auto p-4 flex flex-col gap-5 shrink-0 hidden lg:flex">
+        {/* ============ 右栏：整栏可向右收起 ============ */}
+        {!railOpen && (
+          <button
+            onClick={toggleRail}
+            title="展开右栏"
+            className="w-10 min-h-0 border-l border-line bg-panel/60 shrink-0 hidden lg:flex flex-col items-center gap-3 pt-4 hover:bg-panel transition-colors"
+          >
+            <span className="text-muted text-xs">«</span>
+            {pendingTodos.length + draftArtifacts.length > 0 && (
+              <span className="relative text-sm" title="人类待办">
+                👤
+                <span className="absolute -top-1.5 -right-2 text-[9px] bg-accent text-white rounded-full px-1 leading-tight">
+                  {pendingTodos.length + draftArtifacts.length}
+                </span>
+              </span>
+            )}
+            <span className="text-sm opacity-60" title="项目档案">🗂</span>
+            <span
+              className="text-[10px] text-muted"
+              style={{ writingMode: "vertical-rl" }}
+            >
+              待办与档案
+            </span>
+          </button>
+        )}
+        <aside className={`w-80 min-h-0 border-l border-line bg-panel/40 overflow-y-auto p-4 flex-col gap-5 shrink-0 hidden ${railOpen ? "lg:flex" : ""}`}>
+          <button
+            onClick={toggleRail}
+            className="self-end text-[11px] text-muted hover:text-foreground border border-line rounded-lg px-2 py-1 -mb-2"
+            title="收起右栏"
+          >
+            收起 »
+          </button>
           {(pendingTodos.length > 0 || draftArtifacts.length > 0) && (
             <RailSection
               storageKey="todos"
