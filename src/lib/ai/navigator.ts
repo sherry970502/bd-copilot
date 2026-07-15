@@ -32,10 +32,11 @@ const NAV_SYSTEM_BASE = `你是「领航员」——用户的 BD 项目总调度
 - 用户闲聊或提问时正常回答，不必每次都动计划
 
 **机器可读块**：每次回复的最后，另起一行输出（用户看不到，不算回复正文）：
-<nav>{"summary":"若用户带来了新的事实性进展，用 50 字内提炼成纪要，否则 null","plan":[{"stage":"环节key","needed":true或false,"reason":"一句话理由"}],"next":[{"stage":"环节key","action":"具体要做的事，一句话"}],"dispatch":{"stage":"环节key","task":"任务key 或 null","instruction":"给该专员的具体工作指令"} 或 null,"todos":["只有人能做的事（发出邮件/赴约/内部拍板/等对方答复），0-3 条，AI 能干的绝不放进来"],"status":"active|waiting|won|shelved 或 null（仅在建议变更项目状态时给值）"}</nav>
+<nav>{"summary":"若用户带来了新的事实性进展，用 50 字内提炼成纪要，否则 null","plan":[{"stage":"环节key","needed":true或false,"reason":"一句话理由"}],"next":[{"stage":"环节key","action":"具体要做的事，一句话"}],"dispatch":{"stage":"环节key","task":"任务key 或 null","instruction":"给该专员的具体工作指令"} 或 null,"todos":["只有人能做的事（发出邮件/赴约/内部拍板/等对方答复），0-3 条，AI 能干的绝不放进来"],"todos_done":[已完成或已失效的待办id数字],"status":"active|waiting|won|shelved 或 null（仅在建议变更项目状态时给值）"}</nav>
 - plan 必须包含全部可用环节（{STAGE_KEYS}）；next 给 1-2 项，stage 必须取自可用环节
 - **dispatch 是你的派单权**：下一步如果 AI 现在就能干（档案里材料足够、不需要用户提供新材料或拍板），直接派单，对应专员会立刻在群里交活——不要让用户自己去点。判断标准：需要用户粘贴材料/给新信息/先做人间动作的，不派单（放 next 或 todos）。每次最多派一单；回复正文里顺口说一句"我已经叫X去做了"
 - todos 是「人类待办区」：判断标准是"这件事 AI 无法代劳"——需要用户去真实世界执行或拍板的才列，且不与已有待办重复
+- **todos_done 是你的对账义务**：每轮都对照「当前人类待办」清单——对话表明某条已经完成（用户说做了/事情已发生）或已失效（局面变化不再需要）的，把它的 id 放进来销账。右栏待办必须与对话事实一致，只进不出是失职
 - JSON 必须语法合法，字符串内不要用未转义英文双引号`;
 
 function stageList(): string {
@@ -50,6 +51,13 @@ function stageList(): string {
 function buildNavContext(project: Project): string {
   const db = getDb();
   const profile = getProfile();
+  // 当前挂着的人类待办（带 id，供对账销账）与待审草稿——右栏的状态必须和对话联动
+  const pendingTodos = db
+    .prepare("SELECT id, text FROM todos WHERE project_id = ? AND status = 'pending' ORDER BY id")
+    .all(project.id) as { id: number; text: string }[];
+  const drafts = db
+    .prepare("SELECT title FROM artifacts WHERE project_id = ? AND status = 'draft' ORDER BY id")
+    .all(project.id) as { title: string }[];
   const confirmed = db
     .prepare(
       "SELECT stage_key, title, content FROM artifacts WHERE project_id = ? AND status = 'confirmed' ORDER BY id ASC"
@@ -77,6 +85,12 @@ ${project.situation ?? "（无）"}
 
 项目时间线（近 10 条）：
 ${timeline || "（刚创建）"}
+
+当前人类待办（未完成，对账时用 id 销账）：
+${pendingTodos.map((t) => `#${t.id} ${t.text}`).join("\n") || "（无）"}
+
+待用户审阅的草稿产出物（已存在，不要重复派单生产）：
+${drafts.map((d) => `- ${d.title}`).join("\n") || "（无）"}
 
 已入档产出物与纪要：
 ${archive || "（暂无）"}`;
@@ -133,8 +147,21 @@ export async function runNavigator(project: Project, userMessage: string): Promi
         next?: { stage?: string; action?: string }[];
         dispatch?: { stage?: string; task?: string | null; instruction?: string } | null;
         todos?: string[];
+        todos_done?: number[];
         status?: string | null;
       };
+      // 对账销账：对话表明已完成/失效的待办（校验归属与状态后）
+      if (Array.isArray(parsed.todos_done)) {
+        for (const tid of parsed.todos_done) {
+          const row = db
+            .prepare("SELECT id, text FROM todos WHERE id = ? AND project_id = ? AND status = 'pending'")
+            .get(tid, project.id) as { id: number; text: string } | undefined;
+          if (row) {
+            db.prepare("UPDATE todos SET status = 'done', done_at = ? WHERE id = ?").run(now(), row.id);
+            addTimeline(project.id, "status", `✔ 待办完成：${row.text}（领航员对账）`);
+          }
+        }
+      }
       // 派单：校验环节与任务合法性，稍后（领航员消息落库后）执行
       if (
         parsed.dispatch?.stage &&

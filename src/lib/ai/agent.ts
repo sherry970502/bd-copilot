@@ -79,6 +79,10 @@ function buildContext(project: Project, stageKey: string): string {
           .join("\n\n---\n\n")
       : "（暂无已确认的产出物——如果你的工作依赖前置环节的结论，请提醒用户先完成对应环节）";
 
+  const drafts = db
+    .prepare("SELECT title FROM artifacts WHERE project_id = ? AND status = 'draft' ORDER BY id")
+    .all(project.id) as { title: string }[];
+
   return `—— 项目档案 ——
 我方情况（工作区档案）：
 ${profile?.content ?? project.my_profile ?? "（未建档）"}
@@ -86,6 +90,9 @@ ${profile?.content ?? project.my_profile ?? "（未建档）"}
 目标对象：${project.target || "（尚未明确）"}
 这次的处境与目标（用户建项目时的描述）：
 ${project.situation ?? "（无）"}
+
+待用户审阅的草稿（已存在，别重复生产同样的东西；要改就产出升级版并注明替代关系）：
+${drafts.map((d) => `- ${d.title}`).join("\n") || "（无）"}
 
 已确认的产出物与进展纪要（全体专员共享，按时间序）：
 ${archiveText}`;
