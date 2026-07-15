@@ -232,6 +232,13 @@ export default function ProjectPage() {
   }, [messages.length, busy]);
 
   const plan: NavPlan | null = project?.plan ? JSON.parse(project.plan) : null;
+  /** 最新一条助手消息才允许执行下一步（历史消息的按钮置灰，防误触过时指令） */
+  const lastAssistantIdx = (() => {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (messages[i].role === "assistant") return i;
+    }
+    return -1;
+  })();
   const agentDef = activeAgent ? getStage(activeAgent) : null;
   const confirmedAll = artifacts.filter((a) => a.status === "confirmed");
   const draftArtifacts = artifacts.filter((a) => a.status === "draft");
@@ -381,26 +388,7 @@ export default function ProjectPage() {
       <div className="flex-1 flex min-h-0">
         {/* ============ 主区：项目群聊（统一消息流） ============ */}
         <div className="flex-1 flex flex-col min-w-0 min-h-0 overflow-hidden">
-          {/* 现在该做的事 */}
-          {plan && plan.next.length > 0 && (
-            <div className="px-5 pt-3 pb-1 shrink-0 flex flex-wrap gap-2 items-center">
-              <span className="text-[11px] text-muted font-semibold">👉 现在：</span>
-              {plan.next.map((n, i) => {
-                const s = getStage(n.stage);
-                return (
-                  <button
-                    key={i}
-                    onClick={() => setActiveAgent(n.stage)}
-                    className="text-left border border-accent/40 bg-accent/5 rounded-xl px-3 py-1.5 hover:bg-accent/15 transition-colors"
-                  >
-                    <span className="text-[11px] font-bold text-accent">{s?.agent?.emoji} {n.action}</span>
-                  </button>
-                );
-              })}
-            </div>
-          )}
-
-          {/* 统一消息流 */}
+          {/* 统一消息流（下一步的唯一入口在最新消息的气泡下，顶部不再重复） */}
           <div className="flex-1 min-h-0 overflow-y-auto px-5 py-4 flex flex-col gap-4">
             {messages.length === 0 && (
               <div className="card-soft bg-panel border border-line rounded-2xl px-4 py-3 text-sm max-w-[85%] flex gap-2">
@@ -464,7 +452,7 @@ export default function ProjectPage() {
                         let items: { to: string; stage?: string; task?: string | null; action: string }[] = [];
                         try { items = JSON.parse(m.next_json); } catch { return null; }
                         if (items.length === 0) return null;
-                        const isLatest = i === messages.length - 1;
+                        const isLatest = i === lastAssistantIdx;
                         return (
                           <div className="mt-2.5 pt-2 border-t border-line/60 flex flex-col gap-1.5">
                             <span className="text-[10px] text-muted font-semibold">⏭ 下一步</span>
