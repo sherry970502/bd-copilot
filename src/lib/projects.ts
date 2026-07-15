@@ -113,6 +113,23 @@ export function setStageStatus(projectId: number, stageKey: string, status: Stag
   trackEvent("stage_" + status, stageKey, projectId, stageKey);
 }
 
+/**
+ * 从产出物正文提取"需要人做的事"：解析「待验证清单/探明清单」区块的列表项。
+ * 这些是专员按协议标注的假设与探明点——入档即代表用户认可内容，
+ * 里面的验证动作转为人类待办跟踪（零 AI 成本，与对话/档案联动）。
+ */
+function extractTodosFromArtifact(a: Artifact): string[] {
+  const m = a.content.match(
+    /#{2,4}[^\n]*(待验证清单|探明清单|下一步探明|待办清单)[^\n]*\n([\s\S]*?)(?=\n#{2,4}\s|$)/
+  );
+  if (!m) return [];
+  return m[2]
+    .split("\n")
+    .map((l) => l.replace(/^\s*(?:[-*+]|\d+[.、])\s*/, "").replace(/\*\*/g, "").trim())
+    .filter((l) => l.length >= 4)
+    .slice(0, 5);
+}
+
 export function updateArtifact(
   id: number,
   patch: { status?: "draft" | "confirmed"; content?: string; title?: string }
@@ -126,6 +143,26 @@ export function updateArtifact(
   if (patch.status === "confirmed" && a.status !== "confirmed") {
     addTimeline(a.project_id, "artifact", `产出物入档：${a.title}`);
     trackEvent("artifact_confirmed", a.title, a.project_id, a.stage_key);
+    // 入档联动：待验证/探明清单 → 人类待办（与未完成待办去重）
+    const items = extractTodosFromArtifact({ ...a, content: patch.content ?? a.content });
+    if (items.length > 0) {
+      const existing = new Set(
+        (db
+          .prepare("SELECT text FROM todos WHERE project_id = ? AND status = 'pending'")
+          .all(a.project_id) as { text: string }[]).map((t) => t.text)
+      );
+      let added = 0;
+      for (const text of items) {
+        if (existing.has(text)) continue;
+        db.prepare(
+          "INSERT INTO todos (project_id, text, status, source, created_at) VALUES (?, ?, 'pending', ?, ?)"
+        ).run(a.project_id, text, `artifact:${a.id}`, now());
+        added++;
+      }
+      if (added > 0) {
+        addTimeline(a.project_id, "status", `从「${a.title}」提取 ${added} 条待验证事项进人类待办`);
+      }
+    }
   }
   return db.prepare("SELECT * FROM artifacts WHERE id = ?").get(id) as Artifact;
 }

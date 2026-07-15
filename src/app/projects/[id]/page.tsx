@@ -116,6 +116,50 @@ function speakerOf(stageKey: string): { emoji: string; name: string } {
   return { emoji: a?.emoji ?? "🤖", name: a?.name ?? stageKey };
 }
 
+/** 右栏可折叠区块（折叠状态记 localStorage） */
+function RailSection({
+  storageKey,
+  title,
+  count,
+  defaultOpen,
+  highlight,
+  children,
+}: {
+  storageKey: string;
+  title: string;
+  count?: number;
+  defaultOpen: boolean;
+  highlight?: boolean;
+  children: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  useEffect(() => {
+    const saved = localStorage.getItem(`bdc_rail_${storageKey}`);
+    if (saved !== null) setOpen(saved === "1");
+  }, [storageKey]);
+  function toggle() {
+    setOpen((v) => {
+      localStorage.setItem(`bdc_rail_${storageKey}`, v ? "0" : "1");
+      return !v;
+    });
+  }
+  return (
+    <div>
+      <button
+        onClick={toggle}
+        className="w-full flex items-center gap-1.5 text-xs font-bold mb-2 hover:opacity-70"
+      >
+        <span className={`text-[9px] ${open ? "" : "-rotate-90"} transition-transform`}>▼</span>
+        <span className={highlight ? "text-foreground" : "text-muted"}>
+          {title}
+          {typeof count === "number" ? `（${count}）` : ""}
+        </span>
+      </button>
+      {open && children}
+    </div>
+  );
+}
+
 export default function ProjectPage() {
   const params = useParams<{ id: string }>();
   const projectId = Number(params.id);
@@ -511,10 +555,13 @@ export default function ProjectPage() {
         {/* ============ 右栏：人类待办 + 时间线 + 档案 ============ */}
         <aside className="w-80 min-h-0 border-l border-line bg-panel/40 overflow-y-auto p-4 flex flex-col gap-5 shrink-0 hidden lg:flex">
           {(pendingTodos.length > 0 || draftArtifacts.length > 0) && (
-            <div>
-              <h3 className="text-xs font-bold mb-2 text-foreground">
-                👤 人类待办（{pendingTodos.length + draftArtifacts.length}）
-              </h3>
+            <RailSection
+              storageKey="todos"
+              title="👤 人类待办"
+              count={pendingTodos.length + draftArtifacts.length}
+              defaultOpen
+              highlight
+            >
               <div className="flex flex-col gap-1.5">
                 {draftArtifacts.map((a) => (
                   <div key={`d${a.id}`} className="card-soft bg-panel border border-warn/40 rounded-xl px-3 py-2.5">
@@ -538,15 +585,19 @@ export default function ProjectPage() {
                 {pendingTodos.map((t) => (
                   <label key={t.id} className="card-soft bg-panel border border-line rounded-xl px-3 py-2.5 flex items-start gap-2 cursor-pointer hover:border-accent/50">
                     <input type="checkbox" checked={false} onChange={() => toggleTodo(t)} className="mt-0.5 accent-[#6d5cf5]" />
-                    <span className="text-[12px] leading-snug">{t.text}</span>
+                    <span className="text-[12px] leading-snug">
+                      {t.text}
+                      {t.source?.startsWith("artifact:") && (
+                        <span className="text-[9px] text-muted ml-1">（来自入档产出物）</span>
+                      )}
+                    </span>
                   </label>
                 ))}
               </div>
-            </div>
+            </RailSection>
           )}
 
-          <div>
-            <h3 className="text-xs text-muted font-semibold mb-2">项目时间线</h3>
+          <RailSection storageKey="timeline" title="项目时间线" count={timeline.length} defaultOpen={false}>
             <div className="flex flex-col gap-2">
               {timeline.map((t) => (
                 <div key={t.id} className="flex gap-2 text-[11px] leading-relaxed">
@@ -558,21 +609,22 @@ export default function ProjectPage() {
                 </div>
               ))}
             </div>
-          </div>
+          </RailSection>
 
           <div className="border-t border-line pt-3">
-            <h3 className="text-xs text-muted font-semibold mb-2">项目档案（{confirmedAll.length}）</h3>
-            <div className="flex flex-col gap-1">
-              {confirmedAll.map((a) => (
-                <button
-                  key={a.id}
-                  onClick={() => setViewArtifact(a)}
-                  className="text-left text-[11px] text-muted hover:text-foreground truncate"
-                >
-                  {getStage(a.stage_key)?.agent?.emoji ?? "📝"} {a.title}
-                </button>
-              ))}
-            </div>
+            <RailSection storageKey="archive" title="项目档案" count={confirmedAll.length} defaultOpen>
+              <div className="flex flex-col gap-1">
+                {confirmedAll.map((a) => (
+                  <button
+                    key={a.id}
+                    onClick={() => setViewArtifact(a)}
+                    className="text-left text-[11px] text-muted hover:text-foreground truncate w-full"
+                  >
+                    {getStage(a.stage_key)?.agent?.emoji ?? "📝"} {a.title}
+                  </button>
+                ))}
+              </div>
+            </RailSection>
           </div>
         </aside>
       </div>
